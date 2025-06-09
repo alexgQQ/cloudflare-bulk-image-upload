@@ -8,7 +8,8 @@ from uuid import uuid4
 
 import aiohttp
 
-from upload import CFImageUploader, upload_files
+from uploader import CFImageUploader
+from uploader.upload import upload_files
 
 
 class TestCFImageUploader(unittest.TestCase):

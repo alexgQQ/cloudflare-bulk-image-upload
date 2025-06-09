@@ -1,6 +1,4 @@
 import asyncio
-import hashlib
-import hmac
 import json
 import logging
 import os
@@ -61,7 +59,7 @@ class CFImageUploader:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.check_batch_token()
 
-    def __call__(self, filepaths: List[str], pg: Optional[str] = None) -> list:
+    def __call__(self, filepaths: List[str]) -> list:
         results = asyncio.run(upload_files(self.upload_url, filepaths, self.headers))
         for result, filepath in zip(results, filepaths):
             if isinstance(result, Exception):
