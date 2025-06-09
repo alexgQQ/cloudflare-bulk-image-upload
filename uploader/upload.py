@@ -4,14 +4,27 @@ import logging
 import os
 from datetime import UTC, datetime
 from typing import List, Optional
-
-from dotenv import load_dotenv
-
-load_dotenv()
+import json
+import typing
 
 import aiofiles
 import aiohttp
 import requests
+
+
+class ImageUpload(typing.NamedTuple):
+    filepath: str = ""
+    metadata: dict = {}
+    requireSignedURLs: bool = False
+
+    def form_data(self):
+        data = {
+            "requireSignedURLs": "true" if self.requireSignedURLs else "false",
+        }
+        if self.metadata:
+            metadata = json.dumps(self.metadata)
+            data["metadata"] = metadata
+        return data
 
 
 class CloudflareResponseError(Exception):
@@ -20,27 +33,25 @@ class CloudflareResponseError(Exception):
         self.errors = response.get("errors")
 
 
-async def upload_files(upload_url: str, filepaths: str, headers: dict = {}):
-    async def upload_file(session, url, filepath):
-        data = aiohttp.FormData(
-            {"requireSignedURLs": "true"}  # boolean types can't be serialized here
-        )
-        async with aiofiles.open(filepath, "rb") as file:
+async def upload_files(upload_url: str, images: list[ImageUpload], headers: dict = {}):
+    async def upload_file(session, url: str, image: ImageUpload):
+        data = aiohttp.FormData(image.form_data())
+        async with aiofiles.open(image.filepath, "rb") as file:
             file_data = await file.read()
-            file_name = os.path.basename(filepath)
+            file_name = os.path.basename(image.filepath)
             data.add_field("file", file_data, filename=file_name)
         async with session.post(url, data=data, raise_for_status=True) as response:
             resp = await response.json()
             success = resp.get("success", False)
             if not success:
-                raise CloudflareResponseError(f"{filepath} failed to be uploaded", resp)
+                raise CloudflareResponseError(f"{image.filepath} failed to be uploaded", resp)
             return resp["result"]["id"]
 
     async with aiohttp.ClientSession(
         connector=aiohttp.TCPConnector(ssl=False), headers=headers
     ) as session:
         futures = tuple(
-            upload_file(session, upload_url, filepath) for filepath in filepaths
+            upload_file(session, upload_url, image) for image in images
         )
         return await asyncio.gather(*futures, return_exceptions=True)
 
@@ -59,9 +70,9 @@ class CFImageUploader:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.check_batch_token()
 
-    def __call__(self, filepaths: List[str]) -> list:
-        results = asyncio.run(upload_files(self.upload_url, filepaths, self.headers))
-        for result, filepath in zip(results, filepaths):
+    def __call__(self, images: List[ImageUpload]) -> list:
+        results = asyncio.run(upload_files(self.upload_url, images, self.headers))
+        for result, filepath in zip(results, images):
             if isinstance(result, Exception):
                 self.logger.error(f"Upload failed for {filepath}")
 

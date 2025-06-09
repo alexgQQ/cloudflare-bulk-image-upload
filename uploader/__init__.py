@@ -1,1 +1,1 @@
-from uploader.upload import CFImageUploader
+from uploader.upload import CFImageUploader, ImageUpload
