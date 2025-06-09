@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import aiohttp
 
-from uploader import CFImageUploader
+from uploader import CFImageUploader, ImageUpload
 from uploader.upload import upload_files
 
 
@@ -69,10 +69,8 @@ class TestCFImageUploader(unittest.TestCase):
         }
         mock_resp = self._mock_cf_response(json_data=mock_data)
         mock_get.return_value = mock_resp
-        token, expires = CFImageUploader.fetch_batch_token(
-            "TEST_ACCOUNT", "TEST_API_KEY"
-        )
-        # print(mock_get.call_args)
+        uploader = CFImageUploader("TEST_ACCOUNT", "TEST_API_KEY")
+        token, expires = uploader.fetch_batch_token()
         self.assertEqual(token, test_token)
         self.assertEqual(expires, datetime.fromisoformat(test_expiry))
 
@@ -134,5 +132,7 @@ class TestAsyncImageFileUpload(unittest.IsolatedAsyncioTestCase):
             return_value=contextlib.nullcontext(mock_session),
         ):
             with tempfile.NamedTemporaryFile(suffix=".png") as tmp_file:
-                data = await upload_files(test_url, [tmp_file.name])
+                data = await upload_files(
+                    test_url, [ImageUpload(filepath=tmp_file.name)]
+                )
                 self.assertEqual(data[0], image_uuid)

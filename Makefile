@@ -10,8 +10,8 @@ rmenv: ## delete the dev virtual environment
 	rm .venv
 
 fmt: ## format with black and isort
-	black **/*.py ./*.py
-	isort **/*.py ./*.py
+	black src/**/*.py tests/*.py
+	isort src/**/*.py tests/*.py
 
 test: ## run test suite
 	python -m unittest discover -s tests

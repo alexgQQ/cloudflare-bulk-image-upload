@@ -2,10 +2,9 @@ import asyncio
 import json
 import logging
 import os
+import typing
 from datetime import UTC, datetime
 from typing import List, Optional
-import json
-import typing
 
 import aiofiles
 import aiohttp
@@ -46,15 +45,15 @@ async def upload_files(upload_url: str, images: list[ImageUpload], headers: dict
             resp = await response.json()
             success = resp.get("success", False)
             if not success:
-                raise CloudflareResponseError(f"{image.filepath} failed to be uploaded", resp)
+                raise CloudflareResponseError(
+                    f"{image.filepath} failed to be uploaded", resp
+                )
             return resp["result"]["id"]
 
     async with aiohttp.ClientSession(
         connector=aiohttp.TCPConnector(ssl=False), headers=headers
     ) as session:
-        futures = tuple(
-            upload_file(session, upload_url, image) for image in images
-        )
+        futures = tuple(upload_file(session, upload_url, image) for image in images)
         return await asyncio.gather(*futures, return_exceptions=True)
 
 
@@ -65,7 +64,9 @@ class CFImageUploader:
     # Use a save batched token from this file
     # token_file_path = f"{os.getcwd()}/.cftoken"
 
-    def __init__(self, account_id: str, api_key: str, batch_token: Optional[str] = None) -> None:
+    def __init__(
+        self, account_id: str, api_key: str, batch_token: Optional[str] = None
+    ) -> None:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.account_id = account_id
         self.api_key = api_key
@@ -89,7 +90,10 @@ class CFImageUploader:
 
     @property
     def batch_token_expired(self) -> bool:
-        return self.batch_token_expiry is None or datetime.now(UTC) >= self.batch_token_expiry
+        return (
+            self.batch_token_expiry is None
+            or datetime.now(UTC) >= self.batch_token_expiry
+        )
 
     def check_batch_token(self):
         if self.batch_token is None or self.batch_token_expired:
@@ -131,4 +135,3 @@ class CFImageUploader:
         with open(filepath, "r") as fobj:
             data = json.load(fobj)
             return data["token"], datetime.fromisoformat(data["expiresAt"])
-
