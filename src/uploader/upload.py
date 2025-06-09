@@ -5,6 +5,8 @@ import os
 import typing
 from datetime import UTC, datetime
 from typing import List, Optional
+# introduced in 3.12 so anything under would need to be manually implemented
+from itertools import batched
 
 import aiofiles
 import aiohttp
@@ -71,16 +73,17 @@ class CFImageUploader:
         self.account_id = account_id
         self.api_key = api_key
 
-    def __call__(self, images: List[ImageUpload]) -> list:
+    def __call__(self, images: List[ImageUpload], batch_size: int = 100) -> list:
         self.check_batch_token()
         headers = {
             "User-Agent": self.user_agent,
             "Authorization": f"Bearer {self.batch_token}",
         }
-        results = asyncio.run(upload_files(self.upload_url, images, headers))
-        for result, filepath in zip(results, images):
-            if isinstance(result, Exception):
-                self.logger.error(f"Upload failed for {filepath}")
+        for batch in batched(images, batch_size):
+            results = asyncio.run(upload_files(self.upload_url, batch, headers))
+            for result, image in zip(results, images):
+                if isinstance(result, Exception):
+                    self.logger.error(f"Upload failed for {image.filepath}")
 
         return results
 
