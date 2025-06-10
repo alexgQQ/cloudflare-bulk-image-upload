@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import sys
+from typing import Generator, Optional
 
 from dotenv import load_dotenv
 
@@ -14,31 +15,37 @@ class ConfigError(Exception):
 
 parser = argparse.ArgumentParser(
     prog=sys.argv[0],
-    description="A cli tool to bulk upload images to the Cloudflare Images service",
+    description="A cli tool to bulk upload images to the Cloudflare Images service.",
 )
 parser.add_argument(
     "-i",
     "--images",
     nargs="+",
     required=True,
-    help="",
+    help="Images to upload. This can be set as multiple image files and directories.",
 )
 parser.add_argument(
     "-o",
     "--output",
-    default="-",
-    help="",
+    default=sys.stdout,
+    help="Output the upload results to a json file or stdout as default.",
 )
 parser.add_argument(
     "--env",
     required=False,
     default=None,
-    help="",
+    help="The environment file containing cloudflare auth info. Will read from environment variables if not set.",
 )
 parser.add_argument(
     "--batch-size",
     default=100,
-    help="",
+    help="The number of images to upload in a single attempt.",
+)
+parser.add_argument(
+    "-q",
+    "--quiet",
+    action="store_true",
+    help="Suppress standard output from the command.",
 )
 
 
@@ -117,16 +124,26 @@ def main():
         exit(error=err)
 
     uploader = CFImageUploader(account_id, api_key)
-    results = uploader(uploads, batch_size=args.batch_size)
-    data = {}
-    for filepath, image_uuid in zip(filepaths, results):
-        data[filepath] = image_uuid
+    results, errors = uploader(uploads, batch_size=args.batch_size)
+    data = {cf_id: upload_info.to_dict() for cf_id, upload_info in results.items()}
 
-    if args.output == "-":
+    if args.output is sys.stdout:
         json.dump(data, sys.stdout, indent=2)
     else:
         with open(args.output, "w") as fobj:
             json.dump(data, fobj, indent=2)
+
+    if len(errors) == 0:
+        exit_code = 0
+        exit_msg = f"\n{len(results)} images successfully uploaded" if not args.quiet else None
+    else:
+        exit_code = 1
+        exit_msg = None
+        if not args.quiet:
+            exit_msg = f"\n{len(results)} images successfully uploaded and {len(errors)} images failed to upload"
+            for error in errors:
+                print(error, file=sys.stderr)
+    exit(message=exit_msg, code=exit_code)
 
 
 if __name__ == "__main__":
