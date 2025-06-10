@@ -13,8 +13,16 @@ parser = argparse.ArgumentParser(
     description="A cli tool to bulk upload images to the Cloudflare Images service",
 )
 parser.add_argument(
+    "-i",
     "--images",
+    nargs="+",
     required=True,
+    help="",
+)
+parser.add_argument(
+    "-o",
+    "--output",
+    default="-",
     help="",
 )
 parser.add_argument(
@@ -36,7 +44,7 @@ def is_image(filename):
 
 
 def walk_images(directory, recursive=False):
-    for dirpath, dirnames, filenames in os.walk(directory):
+    for dirpath, _, filenames in os.walk(directory):
         images = (filename for filename in filenames if is_image(filename))
         for image in images:
             yield os.path.join(dirpath, image)
@@ -49,24 +57,49 @@ def walk_images(directory, recursive=False):
 
 def main():
     args = parser.parse_args()
+
+    if "-" in args.images:
+        images = [line.strip() for line in sys.stdin]
+    else:
+        images = args.images
+
     load_dotenv(args.env)
     account_id = os.environ.get("CF_ACCOUNT_ID")
     api_key = os.environ.get("CF_API_KEY")
-    uploader = CFImageUploader(account_id, api_key)
+
     uploads = []
     filepaths = []
-    for filepath in walk_images(args.images):
-        filepaths.append(filepath)
-        uploads.append(
-            ImageUpload(
-                filepath=filepath,
+    for src in images:
+        if not os.path.exists(src):
+            continue
+        elif os.path.isdir(src):
+            for filepath in walk_images(src):
+                filepaths.append(filepath)
+                uploads.append(
+                    ImageUpload(
+                        filepath=filepath,
+                    )
+                )
+        elif is_image(src):
+            filepaths.append(src)
+            uploads.append(
+                ImageUpload(
+                    filepath=src,
+                )
             )
-        )
+
+    uploader = CFImageUploader(account_id, api_key)
     results = uploader(uploads, batch_size=args.batch_size)
     data = {}
     for filepath, image_uuid in zip(filepaths, results):
         data[filepath] = image_uuid
-    json.dump(data, sys.stdout, indent=4)
+
+    if args.output == "-":
+        json.dump(data, sys.stdout, indent=2)
+    else:
+        with open(args.output, "w") as fobj:
+            json.dump(data, fobj, indent=2)
+
 
 if __name__ == "__main__":
     main()
