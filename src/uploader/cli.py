@@ -1,11 +1,17 @@
 import argparse
 import os
 import json
+import configparser
+from typing import Optional, Generator
 
 import sys
 
 from dotenv import load_dotenv
 from uploader import CFImageUploader, ImageUpload
+
+
+class ConfigError(Exception):
+    pass
 
 
 parser = argparse.ArgumentParser(
@@ -38,12 +44,12 @@ parser.add_argument(
 )
 
 
-def is_image(filename):
+def is_image(filename: str) -> bool:
     image_extensions = (".png", ".jpg", ".jpeg")
     return any(filename.endswith(ext) for ext in image_extensions)
 
 
-def walk_images(directory, recursive=False):
+def walk_images(directory: str, recursive: bool = False) -> Generator[str, None, None]:
     for dirpath, _, filenames in os.walk(directory):
         images = (filename for filename in filenames if is_image(filename))
         for image in images:
@@ -51,8 +57,51 @@ def walk_images(directory, recursive=False):
         if not recursive:
             break
 
-            # for dir in dirnames:
-            #     yield from walk_images(os.path.join(dirpath, dir))
+
+def load_ini(ini_file: str) -> tuple[str, str]:
+    try:
+        config = configparser.ConfigParser(ini_file)
+        account_id = config.get("CF_ACCOUNT_ID", None)
+        api_key = config.get("CF_API_KEY", None)
+    except configparser.Error as err:
+        raise ConfigError(f"Unable to read auth values from {config}")
+    else:
+        return account_id, api_key
+
+
+def load_env(env_file: Optional[str] = None) -> tuple[str, str]:
+    if not load_dotenv(env_file):
+        raise ConfigError(f"Unable to load env file for auth {env_file}")
+    try:
+        account_id = os.environ["CF_ACCOUNT_ID"]
+        api_key = os.environ["CF_API_KEY"]
+    except KeyError:
+        raise ConfigError(f"Unable to load env vars for auth")
+    else:
+        return account_id, api_key
+
+
+def load_auth(config: Optional[str] = None) -> tuple[str, str]:
+    if config is not None and os.path.exists(config):
+        if config.endswith(".ini"):
+            account_id, api_key = load_ini(config)
+        else:
+            account_id, api_key = load_env(config)
+    else:
+        account_id, api_key = load_env()
+    return account_id, api_key
+
+
+def exit(message: Optional[str] = None, code: int = 0, error: Optional[Exception] = None):
+    if isinstance(error, Exception):
+        code = 1
+        message = str(error)
+
+    if message and code > 0:
+        print(message, file=sys.stderr)
+    elif message:
+        print(message, file=sys.stdout)
+    sys.exit(code)
 
 
 def main():
@@ -62,10 +111,6 @@ def main():
         images = [line.strip() for line in sys.stdin]
     else:
         images = args.images
-
-    load_dotenv(args.env)
-    account_id = os.environ.get("CF_ACCOUNT_ID")
-    api_key = os.environ.get("CF_API_KEY")
 
     uploads = []
     filepaths = []
@@ -87,6 +132,11 @@ def main():
                     filepath=src,
                 )
             )
+
+    try:
+        account_id, api_key = load_auth()
+    except ConfigError as err:
+        exit(error=err)
 
     uploader = CFImageUploader(account_id, api_key)
     results = uploader(uploads, batch_size=args.batch_size)
