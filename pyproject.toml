@@ -8,7 +8,7 @@ authors = [
     {name = "Alex Grand", email = "me@alexgrand.dev"},
 ]
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dynamic = ["version"]
 
 dependencies = [
@@ -24,3 +24,6 @@ dev = [
     "black==25.1.0",
     "isort==6.0.1"
 ]
+
+[project.scripts]
+cfimgup = "uploader.cli:main"
