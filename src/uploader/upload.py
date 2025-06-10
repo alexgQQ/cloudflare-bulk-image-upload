@@ -29,6 +29,9 @@ class ImageUpload(typing.NamedTuple):
             data["metadata"] = metadata
         return data
 
+    def to_dict(self):
+        return self._asdict()
+
 
 class CloudflareResponseError(Exception):
     def __init__(self, message, response):
@@ -60,11 +63,9 @@ async def upload_files(upload_url: str, images: list[ImageUpload], headers: dict
 
 
 class CFImageUploader:
-    upload_url = "https://batch.imagedelivery.net/images/v1"
-    batch_token = None
-    batch_token_expiry = None
-    # Use a save batched token from this file
-    # token_file_path = f"{os.getcwd()}/.cftoken"
+    upload_url: str = "https://batch.imagedelivery.net/images/v1"
+    batch_token: str | None = None
+    batch_token_expiry: datetime | None = None
 
     def __init__(
         self, account_id: str, api_key: str, batch_token: Optional[str] = None
@@ -73,19 +74,24 @@ class CFImageUploader:
         self.account_id = account_id
         self.api_key = api_key
 
-    def __call__(self, images: List[ImageUpload], batch_size: int = 100) -> list:
+    def __call__(self, images: List[ImageUpload], batch_size: int = 100) -> tuple[dict[str, ImageUpload], list[Exception]]:
         self.check_batch_token()
         headers = {
             "User-Agent": self.user_agent,
             "Authorization": f"Bearer {self.batch_token}",
         }
+        uploads = {}
+        errors = []
         for batch in batched(images, batch_size):
             results = asyncio.run(upload_files(self.upload_url, batch, headers))
             for result, image in zip(results, images):
                 if isinstance(result, Exception):
+                    errors.append(result)
                     self.logger.error(f"Upload failed for {image.filepath}")
+                else:
+                    uploads[result] = image
 
-        return results
+        return uploads, errors
 
     @property
     def user_agent(self):
