@@ -1,12 +1,10 @@
 import argparse
-import os
 import json
-import configparser
-from typing import Optional, Generator
-
+import os
 import sys
 
 from dotenv import load_dotenv
+
 from uploader import CFImageUploader, ImageUpload
 
 
@@ -34,7 +32,7 @@ parser.add_argument(
 parser.add_argument(
     "--env",
     required=False,
-    default=".env",
+    default=None,
     help="",
 )
 parser.add_argument(
@@ -58,41 +56,21 @@ def walk_images(directory: str, recursive: bool = False) -> Generator[str, None,
             break
 
 
-def load_ini(ini_file: str) -> tuple[str, str]:
-    try:
-        config = configparser.ConfigParser(ini_file)
-        account_id = config.get("CF_ACCOUNT_ID", None)
-        api_key = config.get("CF_API_KEY", None)
-    except configparser.Error as err:
-        raise ConfigError(f"Unable to read auth values from {config}")
-    else:
-        return account_id, api_key
-
-
-def load_env(env_file: Optional[str] = None) -> tuple[str, str]:
-    if not load_dotenv(env_file):
-        raise ConfigError(f"Unable to load env file for auth {env_file}")
+def load_auth(env_file: Optional[str] = None) -> tuple[str, str]:
+    if env_file is not None and not load_dotenv(env_file):
+        raise ConfigError(f"Unable to load env file {env_file}")
     try:
         account_id = os.environ["CF_ACCOUNT_ID"]
         api_key = os.environ["CF_API_KEY"]
-    except KeyError:
-        raise ConfigError(f"Unable to load env vars for auth")
+    except KeyError as error:
+        raise ConfigError(f"Required environment variable not set {error}")
     else:
         return account_id, api_key
 
 
-def load_auth(config: Optional[str] = None) -> tuple[str, str]:
-    if config is not None and os.path.exists(config):
-        if config.endswith(".ini"):
-            account_id, api_key = load_ini(config)
-        else:
-            account_id, api_key = load_env(config)
-    else:
-        account_id, api_key = load_env()
-    return account_id, api_key
-
-
-def exit(message: Optional[str] = None, code: int = 0, error: Optional[Exception] = None):
+def exit(
+    message: Optional[str] = None, code: int = 0, error: Optional[Exception] = None
+):
     if isinstance(error, Exception):
         code = 1
         message = str(error)
@@ -134,7 +112,7 @@ def main():
             )
 
     try:
-        account_id, api_key = load_auth()
+        account_id, api_key = load_auth(args.env)
     except ConfigError as err:
         exit(error=err)
 
