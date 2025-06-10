@@ -1,5 +1,6 @@
 import argparse
 import os
+import json
 
 import sys
 
@@ -18,10 +19,32 @@ parser.add_argument(
 )
 parser.add_argument(
     "--env",
-    required=True,
+    required=False,
     default=".env",
     help="",
 )
+parser.add_argument(
+    "--batch-size",
+    default=100,
+    help="",
+)
+
+
+def is_image(filename):
+    image_extensions = (".png", ".jpg", ".jpeg")
+    return any(filename.endswith(ext) for ext in image_extensions)
+
+
+def walk_images(directory, recursive=False):
+    for dirpath, dirnames, filenames in os.walk(directory):
+        images = (filename for filename in filenames if is_image(filename))
+        for image in images:
+            yield os.path.join(dirpath, image)
+        if not recursive:
+            break
+
+            # for dir in dirnames:
+            #     yield from walk_images(os.path.join(dirpath, dir))
 
 
 def main():
@@ -31,15 +54,19 @@ def main():
     api_key = os.environ.get("CF_API_KEY")
     uploader = CFImageUploader(account_id, api_key)
     uploads = []
-    for file in os.listdir(args.images):
+    filepaths = []
+    for filepath in walk_images(args.images):
+        filepaths.append(filepath)
         uploads.append(
             ImageUpload(
-                filepath=os.path.join(args.images, file),
+                filepath=filepath,
             )
         )
-    results = uploader(uploads)
-    print(results)
-
+    results = uploader(uploads, batch_size=args.batch_size)
+    data = {}
+    for filepath, image_uuid in zip(filepaths, results):
+        data[filepath] = image_uuid
+    json.dump(data, sys.stdout, indent=4)
 
 if __name__ == "__main__":
     main()
