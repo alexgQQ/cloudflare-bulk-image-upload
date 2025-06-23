@@ -4,9 +4,9 @@ import logging
 import os
 import typing
 from datetime import UTC, datetime
-from typing import List, Optional
 # introduced in 3.12 so anything under would need to be manually implemented
 from itertools import batched
+from typing import List, Optional
 
 import aiofiles
 import aiohttp
@@ -73,8 +73,11 @@ class CFImageUploader:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.account_id = account_id
         self.api_key = api_key
+        self.check_batch_token()
 
-    def __call__(self, images: List[ImageUpload], batch_size: int = 100) -> tuple[dict[str, ImageUpload], list[Exception]]:
+    def __call__(
+        self, images: List[ImageUpload], batch_size: int = 100
+    ) -> tuple[dict[str, ImageUpload], list[Exception]]:
         self.check_batch_token()
         headers = {
             "User-Agent": self.user_agent,
@@ -103,6 +106,11 @@ class CFImageUploader:
             self.batch_token_expiry is None
             or datetime.now(UTC) >= self.batch_token_expiry
         )
+
+    @classmethod
+    def set_batch_token(cls, batch_token: str, batch_token_expiry: datetime):
+        cls.batch_token = batch_token
+        cls.batch_token_expiry = batch_token_expiry
 
     def check_batch_token(self):
         if self.batch_token is None or self.batch_token_expired:
