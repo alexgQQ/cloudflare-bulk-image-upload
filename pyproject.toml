@@ -14,7 +14,6 @@ dynamic = ["version"]
 dependencies = [
     "aiofiles==24.1.0",
     "aiohttp[speedups]==3.11.13",  # installs aiodns and Brotli for performance
-    "requests==2.32.3"
 ]
 
 [project.optional-dependencies]

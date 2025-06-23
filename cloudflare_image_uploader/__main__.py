@@ -118,9 +118,10 @@ def main():
 
     batch_token = None
     batch_token_expires = None
-    token_info = CFImageUploader.load_batch_token(temp_token_file)
-    if token_info:
-        batch_token, batch_token_expires = token_info
+    if os.path.exists(temp_token_file):
+        token_info = CFImageUploader.load_batch_token(temp_token_file)
+        if token_info:
+            batch_token, batch_token_expires = token_info
 
     uploader = CFImageUploader(
         args.account,

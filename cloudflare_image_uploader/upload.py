@@ -10,7 +10,6 @@ from typing import List, Optional
 
 import aiofiles
 import aiohttp
-import requests
 
 __version__ = "0.0.1"
 
@@ -64,6 +63,27 @@ async def upload_files(upload_url: str, images: list[ImageUpload], headers: dict
     ) as session:
         futures = tuple(upload_file(session, upload_url, image) for image in images)
         return await asyncio.gather(*futures, return_exceptions=True)
+
+
+async def fetch_token(url, headers):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers) as response:
+            resp = await response.json()
+            success = resp.get("success", False)
+            if not success:
+                raise CloudflareResponseError("Batch token request failed", resp)
+            else:
+                try:
+                    results = resp["result"]
+                    token = results["token"]
+                    # Expiry time comes in format "2025-02-10T07:01:55.497877534Z"
+                    # and python 3.11+ `fromisoformat` can handle it
+                    expires = datetime.fromisoformat(results["expiresAt"])
+                except (KeyError, ValueError):
+                    raise CloudflareResponseError(
+                        "Unable to read token information", resp
+                    )
+                return token, expires
 
 
 class CFImageUploader:
@@ -135,19 +155,16 @@ class CFImageUploader:
             "User-Agent": f"{self.user_agent}",
             "Authorization": f"Bearer {self.api_key}",
         }
-        response = requests.get(token_url, headers=headers)
-        response.raise_for_status()
-        resp = response.json()
-        success = resp.get("success", False)
-        if not success:
-            raise CloudflareResponseError("Batch token request failed", resp)
-        else:
-            results = resp["result"]
-            token = results["token"]
-            # Expiry time comes in format "2025-02-10T07:01:55.497877534Z"
-            # and python 3.11+ `fromisoformat` can handle it
-            expires = datetime.fromisoformat(results["expiresAt"])
-            return token, expires
+        try:
+            token, expires = asyncio.run(fetch_token(token_url, headers))
+        except (
+            aiohttp.ClientConnectionError,
+            aiohttp.ClientResponseError,
+            json.JSONDecodeError,
+            CloudflareResponseError,
+        ) as error:
+            raise RuntimeError(f"Unable to fetch a batch token - {error}")
+        return token, expires
 
     @staticmethod
     def save_batch_token(filepath: str, token: str, expires: datetime):
