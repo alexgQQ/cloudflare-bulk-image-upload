@@ -8,8 +8,8 @@ from uuid import uuid4
 
 import aiohttp
 
-from uploader import CFImageUploader, ImageUpload
-from uploader.upload import upload_files
+from cloudflare_image_uploader.upload import (CFImageUploader, ImageUpload,
+                                              upload_files)
 
 
 class TestCFImageUploader(unittest.TestCase):

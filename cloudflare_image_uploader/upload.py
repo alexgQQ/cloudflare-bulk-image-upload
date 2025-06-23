@@ -46,7 +46,7 @@ async def upload_files(upload_url: str, images: list[ImageUpload], headers: dict
             file_data = await file.read()
             file_name = os.path.basename(image.filepath)
             data.add_field("file", file_data, filename=file_name)
-        async with session.post(url, data=data, raise_for_status=True) as response:
+        async with session.post(url, data=data) as response:
             resp = await response.json()
             success = resp.get("success", False)
             if not success:
@@ -56,7 +56,11 @@ async def upload_files(upload_url: str, images: list[ImageUpload], headers: dict
             return resp["result"]["id"]
 
     async with aiohttp.ClientSession(
-        connector=aiohttp.TCPConnector(ssl=False), headers=headers
+        # Skipping ssl verification makes this a little bit faster but risks security
+        connector=aiohttp.TCPConnector(ssl=False),
+        headers=headers,
+        raise_for_status=True,
+        timeout=aiohttp.ClientTimeout(total=10),
     ) as session:
         futures = tuple(upload_file(session, upload_url, image) for image in images)
         return await asyncio.gather(*futures, return_exceptions=True)
@@ -64,15 +68,28 @@ async def upload_files(upload_url: str, images: list[ImageUpload], headers: dict
 
 class CFImageUploader:
     upload_url: str = "https://batch.imagedelivery.net/images/v1"
+    user_agent: str = f"CloudflareImageUploader/{__version__}"
     batch_token: str | None = None
     batch_token_expiry: datetime | None = None
 
     def __init__(
-        self, account_id: str, api_key: str, batch_token: Optional[str] = None
+        self,
+        account_id: str,
+        api_key: str,
+        batch_token: Optional[str] = None,
+        batch_token_expiry: Optional[datetime] = None,
+        user_agent: Optional[str] = None,
     ) -> None:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.account_id = account_id
         self.api_key = api_key
+
+        if user_agent is not None:
+            self.user_agent = user_agent
+
+        if batch_token is not None and batch_token_expiry is not None:
+            self.batch_token = batch_token
+            self.batch_token_expiry = batch_token_expiry
         self.check_batch_token()
 
     def __call__(
@@ -95,10 +112,6 @@ class CFImageUploader:
                     uploads[result] = image
 
         return uploads, errors
-
-    @property
-    def user_agent(self):
-        return f"CloudflareImageUploader/{__version__}"
 
     @property
     def batch_token_expired(self) -> bool:

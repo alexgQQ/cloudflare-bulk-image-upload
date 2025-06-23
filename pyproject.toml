@@ -13,10 +13,8 @@ dynamic = ["version"]
 
 dependencies = [
     "aiofiles==24.1.0",
-    "aiohttp==3.11.13",
-    "requests==2.32.3",
-    "dotenv==0.9.9",
-    "python-dotenv==1.0.1"
+    "aiohttp[speedups]==3.11.13",  # installs aiodns and Brotli for performance
+    "requests==2.32.3"
 ]
 
 [project.optional-dependencies]
@@ -25,5 +23,5 @@ dev = [
     "isort==6.0.1"
 ]
 
-[project.scripts]
-cfimgup = "uploader.cli:main"
+[tool.setuptools]
+packages = ["cloudflare_image_uploader"]
