@@ -18,15 +18,16 @@ class ImageUpload(typing.NamedTuple):
     """An object to represent image upload data to Cloudflare.
 
     On upload this will get serialized to form data.
-    The 'metadata' field can hold anything that is able to be serialized. 
+    The 'metadata' field can hold anything that is able to be serialized.
     The API interface for Cloudflare Images is outlined here.
     https://developers.cloudflare.com/api/resources/images/subresources/v1/methods/create/
-    
+
     Attributes:
         filepath: A str that is the path to the image file.
         metadata: A dictionary containing any key valued metadata to associate with the image.
         requireSignedURLs: A boolean for whether the resulting upload is publicly available or not.
     """
+
     filepath: str = ""
     metadata: dict = {}
     requireSignedURLs: bool = False
@@ -119,6 +120,7 @@ class CFImageUploader:
         batch_token: The authorization token for the batch api.
         batch_token_expiry: The expiry time for the batch token.
     """
+
     upload_url: str = "https://batch.imagedelivery.net/images/v1"
     user_agent: str = f"CloudflareImageUploader/{__version__}"
     batch_token: str | None = None
@@ -151,7 +153,6 @@ class CFImageUploader:
         if batch_token is not None and batch_token_expiry is not None:
             self.batch_token = batch_token
             self.batch_token_expiry = batch_token_expiry
-        self._check_batch_token()
 
     def __call__(
         self, images: List[ImageUpload], batch_size: int = 100
@@ -164,7 +165,7 @@ class CFImageUploader:
 
         Returns:
             A tuple containing the upload results. The first element is a dictionary
-            of the Cloudflare image ids to their related ImageUpload. 
+            of the Cloudflare image ids to their related ImageUpload.
             The second element is a list of exceptions generated during uploads.
             This function doesn't raise exceptions but accumulates them so that
             a failed upload doesn't block potentially successful ones.
@@ -187,16 +188,15 @@ class CFImageUploader:
 
         return uploads, errors
 
-    @classmethod
-    def valid_batch_token(cls) -> bool:
+    def valid_batch_token(self) -> bool:
         """Is the current batch token useable
 
         Returns:
             If the batch token is valid and not expired.
         """
         return (
-            cls.batch_token_expiry is not None
-            or datetime.now(UTC) < cls.batch_token_expiry
+            self.batch_token_expiry is not None
+            or datetime.now(UTC) < self.batch_token_expiry
         )
 
     # @classmethod
@@ -206,7 +206,7 @@ class CFImageUploader:
 
     def _check_batch_token(self):
         """Set a new batch token if one is not set or expired"""
-        if self.batch_token is None or self.valid_batch_token():
+        if self.batch_token is None or not self.valid_batch_token():
             self.batch_token, self.batch_token_expiry = self.fetch_batch_token()
 
     def fetch_batch_token(self) -> tuple[str, datetime]:
