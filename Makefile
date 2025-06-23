@@ -17,7 +17,7 @@ test: ## run test suite
 	python -m unittest discover -s tests
 
 clean: ## remove build artifacts
-	rm -rf cloudflare_image_uploader.egg-info
+	rm -rf cloudflare_image_uploader.egg-info build site .nox
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
