@@ -110,7 +110,7 @@ def main():
         batch_token=batch_token,
         batch_token_expiry=batch_token_expires,
     )
-    uploads = (upload for upload in gather_uploads(images))
+    uploads = [upload for upload in gather_uploads(images)]
     results, errors = uploader(uploads, batch_size=args.batch_size)
     data = {cf_id: upload_info.to_dict() for cf_id, upload_info in results.items()}
 

@@ -1,8 +1,11 @@
 import contextlib
 import json
+import os
+import subprocess
 import tempfile
 import unittest
 import unittest.mock as mock
+import urllib.request
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -10,6 +13,66 @@ import aiohttp
 
 from cloudflare_image_uploader.upload import (CFImageUploader, ImageUpload,
                                               fetch_token, upload_files)
+
+
+class TestFullUpload(unittest.TestCase):
+    """
+    This is a end to end test of the main module entrypoint and needs to be manually ran.
+    It uploads a few images then checks the cloudflare api to match their ids to the related files.
+    Uploaded images are deleted.
+    Setup a .env with valid account id and api key
+    ```
+    CF_ACCOUNT_ID=<acount_id>
+    CF_API_KEY=<api_key>
+    ```
+    then `source` it
+    make sure a few images are in `testimages` directory
+    then comment the skip and run
+    ```
+    python -m unittest tests.test_upload.TestFullUpload
+    ```
+    """
+
+    @unittest.skip("This is a full end to end test and should be ran manually")
+    def test_upload_testimages(self):
+        test_image_dir = "testimages"
+        upload_cmd = (
+            f"python -m cloudflare_image_uploader --images {test_image_dir} -q".split(
+                " "
+            )
+        )
+        upload_results = subprocess.run(
+            upload_cmd, capture_output=True, text=True, check=True
+        )
+        uploads = json.loads(upload_results.stdout)
+        upload_ids = list(uploads.keys())
+        success = len(uploads)
+        self.assertGreater(success, 0)
+        self.assertEqual(success, len(os.listdir(test_image_dir)))
+
+        account_id = os.environ.get("CF_ACCOUNT_ID")
+        api_key = os.environ.get("CF_API_KEY")
+
+        headers = {"Authorization": f"Bearer {api_key}"}
+        url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/images/v1"
+        req = urllib.request.Request(url, None, headers)
+        with urllib.request.urlopen(req) as response:
+            response = json.loads(response.read())
+
+        images = response["result"]["images"]
+        for image in images:
+            image_id = image.get("id")
+            if (image_upload := uploads.get(image_id, None)) is None:
+                continue
+            expected_filename = os.path.basename(image_upload["filepath"])
+            self.assertEqual(image["filename"], expected_filename)
+
+        headers = {"Authorization": f"Bearer {api_key}"}
+        for upload_id in upload_ids:
+            url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/images/v1/{upload_id}"
+            req = urllib.request.Request(url, headers=headers, method="DELETE")
+            with urllib.request.urlopen(req) as response:
+                pass
 
 
 class TestCFImageUploader(unittest.TestCase):
