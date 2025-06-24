@@ -14,72 +14,79 @@ from cloudflare_image_uploader.upload import (CFImageUploader, ImageUpload,
 
 class TestCFImageUploader(unittest.TestCase):
 
+    def setUp(self) -> None:
+        self.account_id = "123"
+        self.api_key = "KEY123"
+        self.test_token = "TEST_TOKEN"
+        self.test_expiry = datetime.now(UTC)
+        self.test_user_agent = "FOOBAR/123"
+
     def tearDown(self):
         CFImageUploader._clear_batch_token()
 
     def test_save_batch_token(self):
-        test_token = "TEST_TOKEN"
-        test_expiry = datetime.now(UTC)
         with tempfile.NamedTemporaryFile() as tmp:
-            CFImageUploader.save_batch_token(tmp.name, test_token, test_expiry)
+            CFImageUploader.save_batch_token(
+                tmp.name, self.test_token, self.test_expiry
+            )
             with open(tmp.name, "r") as fobj:
                 data = json.load(fobj)
 
         token = data["token"]
         expiry = datetime.fromisoformat(data["expiresAt"])
-        self.assertEqual(token, test_token)
-        self.assertEqual(expiry, test_expiry)
+        self.assertEqual(token, self.test_token)
+        self.assertEqual(expiry, self.test_expiry)
 
     def test_load_batch_token(self):
-        test_token = "TEST_TOKEN"
-        test_expiry = datetime.now(UTC)
         test_data = {
-            "token": test_token,
-            "expiresAt": test_expiry.isoformat(),
+            "token": self.test_token,
+            "expiresAt": self.test_expiry.isoformat(),
         }
         with tempfile.NamedTemporaryFile() as tmp:
             with open(tmp.name, "w") as fobj:
                 json.dump(test_data, fobj)
             token, expires = CFImageUploader.load_batch_token(tmp.name)
 
-        self.assertEqual(token, test_token)
-        self.assertEqual(expires, test_expiry)
+        self.assertEqual(token, self.test_token)
+        self.assertEqual(expires, self.test_expiry)
 
     def test_init(self):
-        account_id = "123"
-        api_key = "KEY123"
-        test_token = "TEST_TOKEN"
-        test_expiry = datetime.now(UTC)
-        test_user_agent = "FOOBAR/123"
-
-        uploader = CFImageUploader(account_id, api_key)
-        self.assertEqual(uploader.account_id, account_id)
-        self.assertEqual(uploader.api_key, api_key)
+        uploader = CFImageUploader(self.account_id, self.api_key)
+        self.assertEqual(uploader.account_id, self.account_id)
+        self.assertEqual(uploader.api_key, self.api_key)
 
         uploader = CFImageUploader(
-            account_id, api_key, batch_token=test_token, user_agent=test_user_agent
+            self.account_id, self.api_key, batch_token=self.test_token
         )
         self.assertIsNone(uploader.batch_token)
         self.assertIsNone(uploader.batch_token_expiry)
-        self.assertEqual(uploader.user_agent, test_user_agent)
-        self.assertEqual(CFImageUploader.user_agent, test_user_agent)
 
         uploader = CFImageUploader(
-            account_id, api_key, batch_token=test_token, batch_token_expiry=test_expiry
+            self.account_id,
+            self.api_key,
+            batch_token=self.test_token,
+            batch_token_expiry=self.test_expiry,
         )
-        self.assertEqual(uploader.batch_token, test_token)
-        self.assertEqual(uploader.batch_token_expiry, test_expiry)
-        self.assertEqual(CFImageUploader.batch_token, test_token)
-        self.assertEqual(CFImageUploader.batch_token_expiry, test_expiry)
+        self.assertEqual(uploader.batch_token, self.test_token)
+        self.assertEqual(uploader.batch_token_expiry, self.test_expiry)
+
+    def test_set_user_agent(self):
+        CFImageUploader.set_user_agent(self.test_user_agent)
+        self.assertEqual(CFImageUploader.user_agent, self.test_user_agent)
+
+    def test_set_user_agent(self):
+        CFImageUploader.set_batch_token(self.test_token, self.test_expiry)
+        self.assertEqual(CFImageUploader.batch_token, self.test_token)
+        self.assertEqual(CFImageUploader.batch_token_expiry, self.test_expiry)
 
     def test_call(self):
-        account_id = "123"
-        api_key = "KEY123"
-        test_token = "TEST_TOKEN"
         test_expiry = datetime.now(UTC) + timedelta(days=1)
         test_uploads = [ImageUpload(filepath="foobar") for _ in range(20)]
         uploader = CFImageUploader(
-            account_id, api_key, batch_token=test_token, batch_token_expiry=test_expiry
+            self.account_id,
+            self.api_key,
+            batch_token=self.test_token,
+            batch_token_expiry=test_expiry,
         )
         with mock.patch(
             target="cloudflare_image_uploader.upload.upload_files", spec=upload_files
@@ -90,26 +97,22 @@ class TestCFImageUploader(unittest.TestCase):
             self.assertEqual(upload_mock.call_count, 4)
 
     def test_fetch_batch_token(self):
-        account_id = "123"
-        api_key = "KEY123"
-        test_token = "TEST_TOKEN"
-        test_expiry = datetime.now(UTC)
-        expected_token_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/images/v1/batch_token"
-        expected_auth_header = f"Bearer {api_key}"
-        uploader = CFImageUploader(account_id, api_key)
+        expected_token_url = f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}/images/v1/batch_token"
+        expected_auth_header = f"Bearer {self.api_key}"
+        uploader = CFImageUploader(self.account_id, self.api_key)
 
         with mock.patch(
             target="cloudflare_image_uploader.upload.fetch_token", spec=fetch_token
         ) as fetch_mock:
-            fetch_mock.return_value = (test_token, test_expiry)
+            fetch_mock.return_value = (self.test_token, self.test_expiry)
             token, expires = uploader.fetch_batch_token()
             self.assertTrue(fetch_mock.called)
             self.assertEqual(fetch_mock.call_args[0][0], expected_token_url)
             self.assertEqual(
                 fetch_mock.call_args[0][1]["Authorization"], expected_auth_header
             )
-            self.assertEqual(test_token, token)
-            self.assertEqual(test_expiry, expires)
+            self.assertEqual(self.test_token, token)
+            self.assertEqual(self.test_expiry, expires)
 
 
 class TestAsyncHTTPFunctions(unittest.IsolatedAsyncioTestCase):

@@ -94,7 +94,9 @@ class CloudflareResponseError(Exception):
         self.errors = response.get("errors")
 
 
-async def upload_files(upload_url: str, images: list[ImageUpload], headers: dict = {}):
+async def upload_files(
+    upload_url: str, images: list[ImageUpload], headers: Optional[dict] = None
+):
     async def upload_file(session, url: str, image: ImageUpload):
         data = aiohttp.FormData(image.form_data())
         async with aiofiles.open(image.filepath, "rb") as file:
@@ -113,8 +115,8 @@ async def upload_files(upload_url: str, images: list[ImageUpload], headers: dict
     async with aiohttp.ClientSession(
         # Skipping ssl verification makes this a little bit faster but risks security
         # Only allow as many connections as upload requests that we are making
-        # I hadn't heard of "Happy Eyeballs" delay, but for this case it can save some time
-        # https://github.com/grpc/proposal/blob/master/A61-IPv4-IPv6-dualstack-backends.md#happy-eyeballs-in-the-pick_first-lb-policy
+        # I hadn't heard of "Happy Eyeballs" delay, but for this case it may save some time
+        # https://docs.aiohttp.org/en/stable/client_reference.html
         connector=aiohttp.TCPConnector(
             ssl=False, limit=len(images), happy_eyeballs_delay=None
         ),
@@ -133,17 +135,16 @@ async def fetch_token(url, headers):
             success = resp.get("success", False)
             if not success:
                 raise CloudflareResponseError("Batch token request failed", resp)
-            else:
-                try:
-                    results = resp["result"]
-                    token = results["token"]
-                    expires_at = results["expiresAt"]
-                    expires = datetime.fromisoformat(expires_at)
-                except (KeyError, ValueError):
-                    raise CloudflareResponseError(
-                        "Unable to read token information", resp
-                    )
-                return token, expires
+            try:
+                results = resp["result"]
+                token = results["token"]
+                expires_at = results["expiresAt"]
+                expires = datetime.fromisoformat(expires_at)
+            except (KeyError, ValueError) as err:
+                raise CloudflareResponseError(
+                    "Unable to read token information", resp
+                ) from err
+            return token, expires
 
 
 class CFImageUploader:
@@ -169,7 +170,6 @@ class CFImageUploader:
         api_key: str,
         batch_token: Optional[str] = None,
         batch_token_expiry: Optional[datetime] = None,
-        user_agent: Optional[str] = None,
     ) -> None:
         """Initializes the instance based on spam preference.
 
@@ -183,9 +183,6 @@ class CFImageUploader:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.account_id = account_id
         self.api_key = api_key
-
-        if user_agent is not None:
-            self.set_user_agent(user_agent)
 
         if batch_token is not None and batch_token_expiry is not None:
             self.set_batch_token(batch_token, batch_token_expiry)
@@ -218,7 +215,7 @@ class CFImageUploader:
             for result, image in zip(results, images):
                 if isinstance(result, Exception):
                     errors.append(result)
-                    self.logger.error(f"Upload failed for {image.filepath}")
+                    self.logger.error("Upload failed for %s", image.filepath)
                 else:
                     uploads[result] = image
 
@@ -289,7 +286,7 @@ class CFImageUploader:
             json.JSONDecodeError,
             CloudflareResponseError,
         ) as error:
-            raise RuntimeError(f"Unable to fetch a batch token - {error}")
+            raise RuntimeError("Unable to fetch a batch token") from error
         return token, expires
 
     @staticmethod

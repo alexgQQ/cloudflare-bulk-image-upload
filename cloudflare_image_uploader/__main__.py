@@ -2,7 +2,7 @@ import argparse
 import json
 import os
 import sys
-from typing import Iterator, Optional
+from typing import Iterator
 
 from cloudflare_image_uploader import CFImageUploader, ImageUpload
 
@@ -31,18 +31,17 @@ def walk_images(directory: str, recursive: bool = False) -> Iterator[str]:
             break
 
 
-def exit(
-    message: Optional[str] = None, code: int = 0, error: Optional[Exception] = None
-):
-    if isinstance(error, Exception):
-        code = 1
-        message = str(error)
-
-    if message and code > 0:
-        print(message, file=sys.stderr)
-    elif message:
-        print(message, file=sys.stdout)
-    sys.exit(code)
+def gather_uploads(image_locations: list[str]) -> Iterator[ImageUpload]:
+    for src in image_locations:
+        if os.path.isdir(src):
+            for filepath in walk_images(src):
+                yield ImageUpload(
+                    filepath=filepath,
+                )
+        elif is_image(src):
+            yield ImageUpload(
+                filepath=src,
+            )
 
 
 parser = argparse.ArgumentParser(
@@ -94,28 +93,10 @@ def main():
     else:
         images = args.images
 
-    if not args.account:
-        parser.error("the following arguments are required: --account")
-    if not args.key:
-        parser.error("the following arguments are required: --key")
+    if not args.account or not args.key:
+        parser.error("the following arguments are required: --account, --key")
 
     temp_token_file = ".cftoken"
-    uploads = []
-    for src in images:
-        if os.path.isdir(src):
-            for filepath in walk_images(src):
-                uploads.append(
-                    ImageUpload(
-                        filepath=filepath,
-                    )
-                )
-        elif is_image(src):
-            uploads.append(
-                ImageUpload(
-                    filepath=src,
-                )
-            )
-
     batch_token = None
     batch_token_expires = None
     if os.path.exists(temp_token_file):
@@ -129,6 +110,7 @@ def main():
         batch_token=batch_token,
         batch_token_expiry=batch_token_expires,
     )
+    uploads = (upload for upload in gather_uploads(images))
     results, errors = uploader(uploads, batch_size=args.batch_size)
     data = {cf_id: upload_info.to_dict() for cf_id, upload_info in results.items()}
 
@@ -152,11 +134,13 @@ def main():
     else:
         exit_code = 1
         exit_msg = None
-        if not args.quiet:
-            exit_msg = f"\n{len(results)} images successfully uploaded and {len(errors)} images failed to upload"
-            for error in errors:
-                print(error, file=sys.stderr)
-    exit(message=exit_msg, code=exit_code)
+        exit_msg = f"\n{len(results)} images successfully uploaded and {len(errors)} images failed to upload"
+        for error in errors:
+            print(error, file=sys.stderr)
+
+    if not args.quiet:
+        print(exit_msg, file=sys.stdout if exit_code == 0 else sys.stderr)
+    sys.exit(exit_code)
 
 
 main()
