@@ -4,7 +4,6 @@ import logging
 import os
 import typing
 from datetime import UTC, datetime
-# introduced in 3.12 so anything under would need to be manually implemented
 from itertools import batched
 from typing import List, Optional
 
@@ -12,6 +11,40 @@ import aiofiles
 import aiohttp
 
 __version__ = "0.0.1"
+
+
+# TODO: In general I'd like to make this work with 3.10 and 3.11 but that
+# covers some cross compatibility issues. I'm not sure how to package that
+# but I could just check version in the code despite that being gross. I'd like
+# to look at other options. Below are some code change examples.
+# import platform
+# major, minor, _ = platform.python_version_tuple()
+
+# TODO: the `batched` function was added in 3.12 and has to be implemented
+#   for lower version, this is from the docs on its approximation
+# from itertools import islice
+# def batched(iterable, n, *, strict=False):
+#     if n < 1:
+#         raise ValueError('n must be at least one')
+#     iterator = iter(iterable)
+#     while batch := tuple(islice(iterator, n)):
+#         if strict and len(batch) != n:
+#             raise ValueError('batched(): incomplete batch')
+#         yield batch
+
+# TODO: The UTC const was added in 3.11, so anything below that
+#   has to be done manually like below
+# from datetime import timezone
+# from datetime import datetime, timedelta
+# UTC = timezone(timedelta(0))
+
+# TODO: In python 3.10 the `fromisoformat` functions differently and
+#   does not work with some of the datetime strings used. Instead it
+#   has to be more involved in removing extra microseconds
+# str_date = "2025-02-10T07:01:55.497877534Z"
+# first, seconds = str_date.split(".")
+# str_date = first + "." + seconds[:6] + "Z"
+# expires = datetime.strptime(str_date, "%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 class ImageUpload(typing.NamedTuple):

@@ -1,9 +1,9 @@
-PYVERSION ?= 3.12.4
+PYVERSION ?= 3.13
 ENVNAME ?= cf-image-uploader
 
 env: ## setup the dev virtual environment
 	pyenv virtualenv ${PYVERSION} ${ENVNAME}
-	ln -s "$(shell pyenv root)/versions/${PYVERSION}/envs/${ENVNAME}" .venv
+	ln -s "$(shell pyenv root)/versions/${ENVNAME}" .venv
 
 rmenv: ## delete the dev virtual environment
 	pyenv virtualenv-delete -f ${ENVNAME}
