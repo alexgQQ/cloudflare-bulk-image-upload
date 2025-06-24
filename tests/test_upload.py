@@ -13,6 +13,10 @@ from cloudflare_image_uploader.upload import (CFImageUploader, ImageUpload,
 
 
 class TestCFImageUploader(unittest.TestCase):
+
+    def tearDown(self):
+        CFImageUploader._clear_batch_token()
+
     def test_save_batch_token(self):
         test_token = "TEST_TOKEN"
         test_expiry = datetime.now(UTC)
@@ -58,12 +62,15 @@ class TestCFImageUploader(unittest.TestCase):
         self.assertIsNone(uploader.batch_token)
         self.assertIsNone(uploader.batch_token_expiry)
         self.assertEqual(uploader.user_agent, test_user_agent)
+        self.assertEqual(CFImageUploader.user_agent, test_user_agent)
 
         uploader = CFImageUploader(
             account_id, api_key, batch_token=test_token, batch_token_expiry=test_expiry
         )
         self.assertEqual(uploader.batch_token, test_token)
         self.assertEqual(uploader.batch_token_expiry, test_expiry)
+        self.assertEqual(CFImageUploader.batch_token, test_token)
+        self.assertEqual(CFImageUploader.batch_token_expiry, test_expiry)
 
     def test_call(self):
         account_id = "123"

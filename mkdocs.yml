@@ -8,7 +8,7 @@ theme:
     text: Inter
     code: JetBrains Mono
   icon:
-    logo: material/file-document-multiple-outline
+    logo: material/cloud-upload
   palette:
     # Palette toggle for light mode
     - scheme: default
@@ -40,6 +40,9 @@ plugins:
         python:
           paths: [ "cloudflare_image_uploader" ]
           options:
+            show_submodules: true
+            show_bases: true
+            show_root_heading: true
             show_source: false
             annotations_path: brief
             docstring_style: google

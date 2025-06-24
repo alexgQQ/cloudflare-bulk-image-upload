@@ -112,7 +112,12 @@ async def upload_files(upload_url: str, images: list[ImageUpload], headers: dict
 
     async with aiohttp.ClientSession(
         # Skipping ssl verification makes this a little bit faster but risks security
-        connector=aiohttp.TCPConnector(ssl=False),
+        # Only allow as many connections as upload requests that we are making
+        # I hadn't heard of "Happy Eyeballs" delay, but for this case it can save some time
+        # https://github.com/grpc/proposal/blob/master/A61-IPv4-IPv6-dualstack-backends.md#happy-eyeballs-in-the-pick_first-lb-policy
+        connector=aiohttp.TCPConnector(
+            ssl=False, limit=len(images), happy_eyeballs_delay=None
+        ),
         headers=headers,
         raise_for_status=True,
         timeout=aiohttp.ClientTimeout(total=10),
@@ -132,9 +137,8 @@ async def fetch_token(url, headers):
                 try:
                     results = resp["result"]
                     token = results["token"]
-                    # Expiry time comes in format "2025-02-10T07:01:55.497877534Z"
-                    # and python 3.11+ `fromisoformat` can handle it
-                    expires = datetime.fromisoformat(results["expiresAt"])
+                    expires_at = results["expiresAt"]
+                    expires = datetime.fromisoformat(expires_at)
                 except (KeyError, ValueError):
                     raise CloudflareResponseError(
                         "Unable to read token information", resp
@@ -181,11 +185,10 @@ class CFImageUploader:
         self.api_key = api_key
 
         if user_agent is not None:
-            self.user_agent = user_agent
+            self.set_user_agent(user_agent)
 
         if batch_token is not None and batch_token_expiry is not None:
-            self.batch_token = batch_token
-            self.batch_token_expiry = batch_token_expiry
+            self.set_batch_token(batch_token, batch_token_expiry)
 
     def __call__(
         self, images: List[ImageUpload], batch_size: int = 100
@@ -232,15 +235,37 @@ class CFImageUploader:
             or datetime.now(UTC) < self.batch_token_expiry
         )
 
-    # @classmethod
-    # def set_batch_token(cls, batch_token: str, batch_token_expiry: datetime):
-    #     cls.batch_token = batch_token
-    #     cls.batch_token_expiry = batch_token_expiry
+    @classmethod
+    def set_user_agent(cls, user_agent: str):
+        """Sets the user agent header used for CFImageUploader requests
+
+        Args:
+            user_agent: The user agent header to use.
+        """
+        cls.user_agent = user_agent
+
+    @classmethod
+    def set_batch_token(cls, batch_token: str, batch_token_expiry: datetime):
+        """Sets the batch token to use for CFImageUploader upload requests
+
+        Args:
+            batch_token: The batch token to use.
+            batch_token_expiry: The datetime that the token expires.
+        """
+        cls.batch_token = batch_token
+        cls.batch_token_expiry = batch_token_expiry
+
+    @classmethod
+    def _clear_batch_token(cls):
+        """Remove the batch token used for CFImageUploader"""
+        cls.batch_token = None
+        cls.batch_token_expiry = None
 
     def _check_batch_token(self):
-        """Set a new batch token if one is not set or expired"""
+        """Set a new batch token if one is not set or is expired"""
         if self.batch_token is None or not self.valid_batch_token():
-            self.batch_token, self.batch_token_expiry = self.fetch_batch_token()
+            batch_token, batch_token_expiry = self.fetch_batch_token()
+            self.set_batch_token(batch_token, batch_token_expiry)
 
     def fetch_batch_token(self) -> tuple[str, datetime]:
         """Get a authorized token from Cloudflare to use against their batch API.
