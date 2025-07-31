@@ -64,6 +64,7 @@ class ImageUpload(typing.NamedTuple):
     filepath: str = ""
     metadata: dict = {}
     requireSignedURLs: bool = False
+    id: Optional[str] = None
 
     def form_data(self) -> dict:
         """Get a dictionary that can be serialized as body form data.
@@ -71,9 +72,14 @@ class ImageUpload(typing.NamedTuple):
         Returns:
             A dictionary of the request form data.
         """
+        if self.requireSignedURLs and self.id is not None:
+            raise RuntimeError("A Cloudflare image upload cannot specify an id and require a signed url")
+
         data = {
             "requireSignedURLs": "true" if self.requireSignedURLs else "false",
         }
+        if self.id is not None:
+            data["id"] = str(self.id)
         if self.metadata:
             metadata = json.dumps(self.metadata)
             data["metadata"] = metadata
